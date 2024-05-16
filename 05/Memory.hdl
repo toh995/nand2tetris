@@ -25,5 +25,34 @@ CHIP Memory {
     OUT out[16];
 
     PARTS:
-	//// Replace this comment with your code.
+    // Check whether to write to RAM or screen
+    DMux(sel=address[14], in=load, a=loadRam, b=maybeScreen);
+    Mux(sel=address[13], a=maybeScreen, b=false, out=loadScreen);
+    
+    // Connect to the main components
+    RAM16K(in=in, load=loadRam, address=address[0..13], out=ramOut);
+    Screen(in=in, load=loadScreen, address=address[0..12], out=screenOut);
+    Keyboard(out=kbdOut);
+    
+    // Determine the final output value
+    Mux16(sel=address[14], a=ramOut, b=out1, out=out);
+    Mux16(sel=address[13], a=screenOut, b=out2, out=out1);
+    Mux16(sel=useKbd, a=false, b=kbdOut, out=out2);
+    
+    // Calculate `useKbd`.
+    // Set useKbd = 1, if BOTH:
+    //  - address[13..14] == true
+    //  - address[0..12] == false
+    
+    // Check address[13..14] == true
+    And(a=address[13], b=address[14], out=lastTrue);
+
+    // Check address[0..12] == false
+    Or8Way(in=address[0..7], out=hasTrue1);
+    Or8Way(in[0..4]=address[8..12], in[5..7]=false, out=hasTrue2);
+    Or(a=hasTrue1, b=hasTrue2, out=hasTrue);
+    Not(in=hasTrue, out=allFalse);
+    
+    // Final check for useKbd
+    And(a=lastTrue, b=allFalse, out=useKbd);
 }
