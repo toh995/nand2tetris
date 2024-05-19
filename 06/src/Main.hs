@@ -1,66 +1,23 @@
 module Main where
 
-import Control.Exception
-import Control.Monad.Except
 import Control.Monad.State
 import Data.Either
 import Data.Functor
-import Data.List
+import Data.HashMap.Lazy qualified as HashMap
 import Data.Void
 import System.Environment
-import System.FilePath
 import Text.Megaparsec hiding (State)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
-newtype ValidationException = ValidationException String
-  deriving (Show)
-instance Exception ValidationException
-
-type BinaryString = String
-type BinaryChar = Char
-
 main :: IO ()
 main = do
   filePath <- getArgs <&> head
-  instructions <- readFile filePath <&> fromRight [] . runParser instructionsP ""
-  let newFileContents = intercalate "\n" . map instructionToBinary $ instructions
-  let filePath' = replaceExtension filePath ".hack"
-  writeFile filePath' newFileContents
+  -- instructions <- readFile filePath <&> fromRight [] . runParser instructionsP ""
+  pure ()
 
--- print instructions
--- print $ map instructionToBinary instructions
-
--- main :: IO ()
--- main = do
---   filePath <- getArgs <&> head
---   fileContents <- readFile filePath
---   let filePath' = replaceExtension filePath ".hack"
---   writeFile filePath' fileContents
-
--- main' :: ExceptT String IO ()
--- main' = do
---   filePath <- ExceptT $ getArgs <&> extractFilePath
---   fileContents <- ExceptT $ readFile filePath <&> Right
---   pure ()
---
--- extractFilePath :: [String] -> Either String FilePath
--- extractFilePath [filePath]
---   | takeExtension filePath == ".asm" = Right filePath
---   | otherwise = Left "asdf"
--- extractFilePath _ = Left "asdf"
-
--- extractFilePath :: [String] -> ExceptT String IO FilePath
--- extractFilePath [filePath]
---   | takeExtension filePath == ".asm" = pure filePath
---   | otherwise = throwError "asdf"
--- extractFilePath _ = throwError "asdf"
-
--- extractFilePath :: [String] -> FilePath
--- extractFilePath [filePath]
---   | takeExtension filePath == ".asm" = filePath
---   | otherwise = throw $ ValidationException "asdf"
--- extractFilePath _ = throw $ ValidationException "asdf"
+type BinaryString = String
+type BinaryChar = Char
 
 data Instruction
   = AInstruction Int
@@ -71,50 +28,14 @@ data Instruction
       }
   deriving (Show)
 
--- CONVERSION
-instructionToBinary :: Instruction -> BinaryString
-instructionToBinary (AInstruction n) = "0" ++ intToBinary15 n
-instructionToBinary CInstruction{comp, dest, jump} = "111" ++ comp ++ dest ++ jump
+type Parser = ParsecT Void String (State S)
 
-intToBinary15 :: Int -> BinaryString
-intToBinary15 n =
-  evalState
-    (mapM computeBinChar [14, 13 .. 0])
-    (n `mod` 15)
- where
-  computeBinChar :: Int -> State Int BinaryChar
-  computeBinChar k =
-    get >>= \n' ->
-      if n' >= (2 ^ k)
-        then put (n' - (2 ^ k)) >> pure '1'
-        else pure '0'
-
--- intToBinary15 n = helper (n `mod` 15) 0 ""
---  where
---   helper :: Int -> Int -> BinaryString -> BinaryString
---   helper n' k binStr
---     | k < 0 = binStr
---     | n' >= (2 ^ k) = helper (n' - (2 ^ k)) (k - 1) ('1' : binStr)
---     | otherwise = helper n' (k - 1) ('0' : binStr)
-
--- foo k = do
---   n' <- get
---   if n' >= (2 ^ k)
---     then pure '1'
---     else pure '0'
-
--- intToBinary15 :: Int -> BinaryString
--- intToBinary15 n = foldl f "" [14, 13 .. 0]
---   where
---     f :: BinaryString -> Int -> BinaryString
---     f acc k =
-
--- intToBinary15 n
---   | n >= 2 ^ 15 = Left "foo"
---   | n `mod` 2 == 1 = intToBinary15
-
--- PARSING
-type Parser = Parsec Void String
+type LabelName = String
+data S = S
+  { pc :: Int
+  , labelMap :: HashMap.HashMap LabelName Int
+  , instructions :: [Instruction]
+  }
 
 ignoreP :: Parser ()
 ignoreP =
