@@ -1,0 +1,25 @@
+cabal-version:      3.4
+name:               HackAssembler
+version:            0.1.0.0
+build-type:         Simple
+
+common warnings
+  ghc-options: -Wall
+
+executable HackAssembler
+  import:           warnings
+  default-language: GHC2021
+  build-depends:
+      base ^>=4.18.2.1
+    , filepath ^>=1.4.300.1
+    , ghc ^>=9.6.5
+    , megaparsec >=9.6.1
+    , mtl ^>=2.3.1
+    , unordered-containers ^>=0.2.20
+    , utility-ht ^>=0.0.17.1
+  hs-source-dirs:   src
+  main-is:          Main.hs
+  other-modules:
+    Parse
+    Translate
+    Types
