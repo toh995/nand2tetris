@@ -1,41 +1,18 @@
-module Main2 where
+module Parse where
 
-import Control.Monad.State
 import Data.Either
 import Data.Functor
-import Data.HashMap.Lazy qualified as HashMap
 import Data.Void
-import System.Environment
-import Text.Megaparsec hiding (State)
+import Text.Megaparsec hiding (Label, State, label)
 import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
-main :: IO ()
-main = do
-  filePath <- getArgs <&> head
-  -- instructions <- readFile filePath <&> fromRight [] . runParser instructionsP ""
-  pure ()
+import Types
 
-type BinaryString = String
-type BinaryChar = Char
+type Parser = Parsec Void String
 
-data Instruction
-  = AInstruction Int
-  | CInstruction
-      { dest :: BinaryString
-      , comp :: BinaryString
-      , jump :: BinaryString
-      }
-  deriving (Show)
-
-type Parser = ParsecT Void String (State S)
-
-type LabelName = String
-data S = S
-  { pc :: Int
-  , labelMap :: HashMap.HashMap LabelName Int
-  , instructions :: [Instruction]
-  }
+parseLines :: String -> [Line]
+parseLines = fromRight [] . runParser linesP ""
 
 ignoreP :: Parser ()
 ignoreP =
@@ -44,25 +21,34 @@ ignoreP =
     (L.skipLineComment "//")
     empty
 
-instructionsP :: Parser [Instruction]
-instructionsP =
+linesP :: Parser [Line]
+linesP =
   ignoreP
-    *> instructionP `sepEndBy` ignoreP
+    *> lineP `sepEndBy` ignoreP
 
-instructionP :: Parser Instruction
-instructionP = aInstructionP <|> cInstructionP
+lineP :: Parser Line
+lineP = aInstructionP <|> cInstructionP <|> labelP
 
-aInstructionP :: Parser Instruction
+labelP :: Parser Line
+labelP = do
+  _ <- char '('
+  labelName <- takeWhile1P Nothing (/= ')')
+  _ <- char ')'
+  pure $ LabelLine labelName
+
+aInstructionP :: Parser Line
 aInstructionP =
-  AInstruction
-    <$> (char '@' *> L.decimal)
+  AInstructionLine
+    <$> ( char '@'
+            *> takeWhile1P Nothing (not . (`elem` ['\n', '\r']))
+        )
 
-cInstructionP :: Parser Instruction
+cInstructionP :: Parser Line
 cInstructionP = do
-  dest <- destBinStrP <* char '='
+  dest <- try (destBinStrP <* char '=') <|> pure "000"
   comp <- compBinStrP
-  let jump = "000"
-  pure CInstruction{dest, comp, jump}
+  jump <- try (char ';' *> jumpBinStrP) <|> pure "000"
+  pure CInstructionLine{dest, comp, jump}
 
 destBinStrP :: Parser BinaryString
 destBinStrP =
@@ -76,6 +62,17 @@ destBinStrP =
     <|> (string "A" $> "100")
     <|> (string "M" $> "001")
     <|> (string "D" $> "010")
+
+jumpBinStrP :: Parser BinaryString
+jumpBinStrP =
+  (string "null" $> "000")
+    <|> (string "JGT" $> "001")
+    <|> (string "JEQ" $> "010")
+    <|> (string "JGE" $> "011")
+    <|> (string "JLT" $> "100")
+    <|> (string "JNE" $> "101")
+    <|> (string "JLE" $> "110")
+    <|> (string "JMP" $> "111")
 
 compBinStrP :: Parser BinaryString
 compBinStrP =
