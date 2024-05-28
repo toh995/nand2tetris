@@ -1,0 +1,29 @@
+cabal-version:      3.4
+name:               VMTranslator
+version:            0.1.0.0
+build-type:         Simple
+
+common warnings
+  ghc-options: -Wall
+
+executable VMTranslator
+  import:           warnings
+  default-language: GHC2021
+  default-extensions:
+    LambdaCase
+  build-depends:
+    base ^>=4.17.2.1
+    , filepath ^>=1.5.2.0
+    , megaparsec >=9.6.1
+    , mtl ^>=2.3.1
+  hs-source-dirs:   src
+  main-is:          Main.hs
+  other-modules:
+    Parse
+    Translate
+    Translate.Arithmetic
+    Translate.Logical
+    Translate.Memory
+    Translate.Memory.Push
+    Translate.Memory.Pop
+    Types
