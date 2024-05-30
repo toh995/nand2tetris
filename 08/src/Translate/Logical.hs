@@ -4,9 +4,6 @@ import Control.Monad.State
 
 import Types
 
-initialCount :: Counter
-initialCount = 0
-
 translate :: (MonadState Counter m) => LogicalCommand -> m [AsmCommand]
 translate Eq = do
   count <- get
