@@ -1,0 +1,47 @@
+class Main {
+  function void main() {
+    var Board curr, next;
+    var char input;
+    var int randSeed1, randSeed2;
+
+    // Display the initial prompt for user input
+    do Output.printString("Welcome to Conway's game of life!");
+    do Output.println();
+    do Output.println();
+    do Output.printString("Please choose an initial configuration:");
+    do Output.println();
+    do Output.printString("(1) Blinker");
+    do Output.println();
+    do Output.printString("(2) Pulsar");
+    do Output.println();
+    do Output.printString("(3) Lightweight spaceship");
+    do Output.println();
+    do Output.printString("(4) Random");
+    do Output.println();
+    do Output.println();
+    do Output.printString("Enter your choice here (1-4):");
+    let input = Keyboard.readChar();
+
+    // The character '1' has ASCII code 49
+    if (input = 49) { let curr = Board.newBlinker(); }
+    if (input = 50) { let curr = Board.newPulsar(); }
+    if (input = 51) { let curr = Board.newLightweightSpaceship(); }
+    if (input = 52) {
+      do Output.println();
+      let randSeed1 = Keyboard.readInt("Enter a seed number for RNG: ");
+      let randSeed2 = Keyboard.readInt("Enter a second seed number for RNG: ");
+      let curr = Board.newRandom(randSeed1, randSeed2);
+    }
+
+    // Enter the main loop
+    do Screen.clearScreen();
+    while (true) {
+      do curr.draw();
+      let next = curr.nextBoard();
+      do curr.dispose();
+      let curr = next;
+      do Sys.wait(300);
+    }
+    return;
+  }
+}

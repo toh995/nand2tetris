@@ -1,0 +1,263 @@
+class Board {
+  // A 2D array representing the screen state.
+  // The value matrix[i][j] is a boolean, which
+  // reports whether the coordinate (i, j) is live or not.
+  //
+  // NOTE: Each "coordinate" in the matrix represents a
+  // _square_ of pixels on the screen! This means that the
+  // matrix "coordinates" do NOT correspond one-to-one with
+  // pixel locations!
+  field Array matrix;
+
+  field int squareSize, numRows, numCols;
+
+  /** Constructs a new board, with ALL squares dead. */
+  constructor Board newEmpty() {
+    do initializeEmpty();
+    return this;
+  }
+
+  // https://conwaylife.com/wiki/Blinker
+  constructor Board newBlinker() {
+    var int i, j, length;
+    let i=0; let j=-1; let length=3;
+    do initializeEmpty();
+    do setHorizontalLine(i, j, length);
+    return this;
+  }
+
+  // https://conwaylife.com/wiki/Pulsar
+  constructor Board newPulsar() {
+    var int length;
+    let length = 3;
+    do initializeEmpty();
+    do setHorizontalLine(-1, -4, length);
+    do setHorizontalLine(-1,  2, length);
+    do setHorizontalLine(-6, -4, length);
+    do setHorizontalLine(-6,  2, length);
+    do setHorizontalLine( 1, -4, length);
+    do setHorizontalLine( 1,  2, length);
+    do setHorizontalLine( 6, -4, length);
+    do setHorizontalLine( 6,  2, length);
+    do setVerticalLine(-4, -6, length);
+    do setVerticalLine(-4, -1, length);
+    do setVerticalLine(-4,  6, length);
+    do setVerticalLine(-4,  1, length);
+    do setVerticalLine( 2, -6, length);
+    do setVerticalLine( 2, -1, length);
+    do setVerticalLine( 2,  6, length);
+    do setVerticalLine( 2,  1, length);
+    return this;
+  }
+
+  // https://conwaylife.com/wiki/Lightweight_spaceship
+  constructor Board newLightweightSpaceship() {
+    do initializeEmpty();
+    do setVal(0, 1, true);
+    do setVal(1, 2, true);
+    do setVal(2, 0, true);
+    do setVal(2, 1, true);
+    do setVal(2, 2, true);
+    return this;
+  }
+  
+  /** Constructs a new board, with each square randomly decided to be live/dead. */
+  constructor Board newRandom(int seed1, int seed2) {
+    var LFSR32Rand rand;
+    var int i, j;
+    
+    do initializeEmpty();
+    
+    let rand = LFSR32Rand.new();
+    do rand.seed(seed1, seed2);
+    let i = 0;
+    while (i < numRows) {
+      let j = 0;
+      while (j < numCols) {
+        do setVal(i, j, rand.randBool());
+        let j=j+1;
+      }
+      let i=i+1;
+    }
+    do rand.dispose();
+    return this;
+  }
+
+  method void initializeEmpty() {
+    var int i, j;
+    var Array row;
+    
+    let squareSize = 8;
+    let numRows = 256 / squareSize;
+    let numCols = 512 / squareSize;
+    let matrix = Array.new(numRows);
+
+    let i = 0;
+    while (i < numRows) {
+      let row = Array.new(numCols);
+      let j = 0;
+      while (j < numCols) {
+        let row[j] = false;
+        let j = j+1;
+      }
+      let matrix[i] = row;
+      let i = i+1;
+    }
+    return;
+  }
+
+  method void dispose() {
+    var Array row;
+    var int i;
+    let i = 0;
+    while (i < numRows) {
+      let row = matrix[i];
+      do row.dispose();
+      let i=i+1;
+    }
+    do matrix.dispose();
+    do Memory.deAlloc(this);
+    return;
+  }
+  
+  method void draw() {
+    var int i, j;
+    do Screen.clearScreen();
+    let i = 0;
+    while (i < numRows) {
+      let j = 0;
+      while (j < numCols) {
+        if (isLive(i, j)) {
+          do Screen.drawRectangle(
+            j*squareSize+1,
+            i*squareSize+1, 
+            (j*squareSize)+squareSize-2,
+            (i*squareSize)+squareSize-2
+          );
+        }
+        let j = j+1;
+      }
+      let i = i+1;
+    }
+    return;
+  }
+
+  method void setVal(int i, int j, boolean val) {
+    var Array row;
+    let row = matrix[i];
+    let row[j] = val;
+    return;
+  }
+
+  /**
+   * Sets a horizontal line in the matrix, starting with (i, j)
+   * as the left-most square.
+   *
+   * NOTE that both i and j represent offsets from the center
+   * of the board.
+   */
+  method void setHorizontalLine(int i, int j, int length) {
+    var int iCenter, jCenter, k;
+    let iCenter = numRows / 2;
+    let jCenter = numCols / 2;
+    let k = 0;
+    while (k < length) {
+      do setVal(iCenter+i, jCenter+j+k, true);
+      let k=k+1;
+    }
+    return;
+  }
+  
+  /**
+   * Sets a vertical line in the matrix, starting with (i, j)
+   * as the top-most square.
+   *
+   * NOTE that both i and j represent offsets from the center
+   * of the board.
+   */
+  method void setVerticalLine(int i, int j, int length) {
+    var int iCenter, jCenter, k;
+    let iCenter = numRows / 2;
+    let jCenter = numCols / 2;
+    let k = 0;
+    while (k < length) {
+      do setVal(iCenter+i+k, jCenter+j, true);
+      let k=k+1;
+    }
+    return;
+  }
+  
+  method boolean isValidCoord(int i, int j) {
+    return (-1 < i) & (i < numRows)
+      & (-1 < j) & (j < numCols);
+  }
+
+  method boolean isLive(int i, int j) {
+    var Array row;
+    let row = matrix[i];
+    return row[j];
+  }
+  
+  method int liveNeighborCount(int i, int j) {
+    var int ret;
+    let ret = 0;
+    if (isValidCoord(i+1, j+1)) {
+      if (isLive(i+1, j+1)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i+1, j)) {
+      if (isLive(i+1, j)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i+1, j-1)) {
+      if (isLive(i+1, j-1)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i-1, j+1)) {
+      if (isLive(i-1, j+1)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i-1, j)) {
+      if (isLive(i-1, j)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i-1, j-1)) {
+      if (isLive(i-1, j-1)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i, j+1)) {
+      if (isLive(i, j+1)) { let ret=ret+1; }
+    }
+    if (isValidCoord(i, j-1)) {
+      if (isLive(i, j-1)) { let ret=ret+1; }
+    }
+    return ret;
+  }
+
+  method Board nextBoard() {
+    var Board retBoard;
+    var int i, j;
+    
+    let retBoard = Board.newEmpty();
+    let i = 0;
+    while (i < numRows) {
+      let j = 0;
+      while (j < numCols) {
+        do retBoard.setVal(i, j, nextValForCoord(i, j));
+        let j=j+1;
+      }
+      let i=i+1;
+    }
+    
+    return retBoard;
+  }
+  
+  method boolean nextValForCoord(int i, int j) {
+    var int numLiveNeighbors;
+    let numLiveNeighbors = liveNeighborCount(i, j);
+    
+    if (isLive(i, j)) {
+      if (numLiveNeighbors < 2) { return false; }
+      if (numLiveNeighbors > 3) { return false; }
+      return true;
+    }
+    else {
+      if (numLiveNeighbors = 3) { return true; }
+      return false;
+    }
+  }
+}
