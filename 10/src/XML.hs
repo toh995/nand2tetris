@@ -23,15 +23,12 @@ instance Show XmlTreeNode where
       "&" -> "&amp;"
       _ -> body
   show XmlBranchNode{tagLabel, children} =
-    "<" ++ tagLabel ++ ">\n" ++ body ++ "\n</" ++ tagLabel ++ ">"
+    "<" ++ tagLabel ++ ">\n" ++ body ++ "</" ++ tagLabel ++ ">"
    where
     body =
-      intercalate "\n"
+      unlines
         . map ("  " ++)
         . lines
         . intercalate "\n"
         . map show
         $ children
-
-foo :: XmlTreeNode -> String
-foo = show

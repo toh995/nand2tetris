@@ -15,17 +15,15 @@ executable JackAnalyzer
     , filepath ^>=1.5.2.0
     , megaparsec >=9.6.1
     , mtl ^>=2.3.1
-    , pipes ^>=4.3.16
   default-extensions:
     LambdaCase
-    MultiWayIf
   hs-source-dirs:   src
   main-is:          Main.hs
   other-modules:
     AST
-    Consumer
-    Foo
-    Parse
-    Pipee
-    Types
+    AST.Build
+    AST.ToXML
+    Token
+    Token.Parse
+    Token.ToXML
     XML
