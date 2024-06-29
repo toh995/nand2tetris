@@ -1,2 +1,4 @@
+**/.DS_Store
+
 # Ignore haskell build files
 **/dist-newstyle/*
