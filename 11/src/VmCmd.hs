@@ -1,8 +1,5 @@
 module VmCmd where
 
-class ToVmCmds a where
-  toVmCmds :: a -> [VmCmd]
-
 type LabelName = String
 
 data VmCmd

@@ -7,6 +7,7 @@ import System.Directory
 import System.Environment
 import System.FilePath
 
+import AST
 import Parse
 import VmCmd
 
@@ -49,7 +50,7 @@ writeVmFile filePath = do
   assertJackExt filePath
   fileContents <- liftIO $ readFile filePath
   astClass <- parseClass fileContents
-  let vmCmds = toVmCmds astClass
+  vmCmds <- classToVmCmds astClass
   let fileContents' =
         intercalate "\n"
           . map toStr

@@ -3,10 +3,38 @@
 module SymbolTable where
 
 import Control.Lens hiding (index)
+import Control.Monad.Except
+import Control.Monad.State
 import Data.HashMap.Lazy qualified as HashMap
 
-import AST
-import Control.Monad.State
+import VmCmd
+
+type VarName = String
+
+data Variable = Variable
+  { name :: VarName
+  , kind :: VarKind
+  , type' :: String
+  , index :: Int
+  }
+  deriving (Show)
+
+data VarKind = FieldVar | StaticVar | LocalVar | ArgVar
+  deriving (Show)
+
+segment :: Variable -> Segment
+segment Variable{kind} =
+  case kind of
+    FieldVar -> This
+    StaticVar -> Static
+    LocalVar -> Local
+    ArgVar -> Argument
+
+-- segment :: VarKind -> Segment
+-- segment FieldVar = This
+-- segment StaticVar = Static
+-- segment LocalVar = Local
+-- segment ArgVar = Argument
 
 data SymbolTable = SymbolTable
   { _hm :: HashMap.HashMap String Variable
@@ -45,6 +73,12 @@ insert v = execState stateMonad
       StaticVar -> staticVarIdx +~ 1
       LocalVar -> localVarIdx +~ 1
       ArgVar -> argVarIdx +~ 1
+
+lookup :: (MonadError String m) => VarName -> SymbolTable -> m Variable
+lookup varName symbolTable =
+  case symbolTable ^. hm . at varName of
+    (Just v) -> pure v
+    Nothing -> throwError $ "Could not find symbol '" ++ varName ++ "' in SymbolTable"
 
 -- \| StaticVar | LocalVar | ArgVar
 

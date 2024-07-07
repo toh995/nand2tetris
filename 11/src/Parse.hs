@@ -8,6 +8,7 @@ import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
 import AST
+import SymbolTable
 
 parseClass :: (MonadError String m) => String -> m Class
 parseClass =
@@ -96,8 +97,39 @@ localVarsP = do
 
 statementP :: Parser Statement
 statementP =
-  doStatementP
+  letStatementP
+    <|> ifStatementP
+    <|> doStatementP
     <|> returnStatementP
+
+letStatementP :: Parser Statement
+letStatementP = do
+  _ <- keywordP "let"
+  varName <- identifierP
+  _ <- symbolP '='
+  expr <- exprP
+  _ <- symbolP ';'
+  pure $ LetStatement varName expr
+
+ifStatementP :: Parser Statement
+ifStatementP = do
+  _ <- keywordP "if"
+  _ <- symbolP '('
+  expr <- exprP
+  _ <- symbolP ')'
+  _ <- symbolP '{'
+  ifStatements <- many statementP
+  _ <- symbolP '}'
+  elseStatements <- elseStatementsP <|> pure []
+  pure IfStatement{expr, ifStatements, elseStatements}
+
+elseStatementsP :: Parser [Statement]
+elseStatementsP = do
+  _ <- keywordP "else"
+  _ <- symbolP '{'
+  ret <- many statementP
+  _ <- symbolP '}'
+  pure ret
 
 doStatementP :: Parser Statement
 doStatementP = do
@@ -155,4 +187,4 @@ unaryOpP =
 binaryOpP :: Parser BinaryOp
 binaryOpP =
   (symbolP '+' $> AstAdd)
-    <|> (symbolP '*' $> AstMult)
+    <|> (symbolP '*' $> AstMul)
