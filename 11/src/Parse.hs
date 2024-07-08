@@ -58,6 +58,7 @@ classP = do
   name <- identifierP
   _ <- symbolP '{'
   subroutineDecs <- many $ subroutineDecP name
+  _ <- symbolP '}'
   pure Class{name, subroutineDecs, classVars = []}
 
 subroutineDecP :: String -> Parser SubroutineDec
@@ -99,6 +100,7 @@ statementP :: Parser Statement
 statementP =
   letStatementP
     <|> ifStatementP
+    <|> whileStatementP
     <|> doStatementP
     <|> returnStatementP
 
@@ -131,6 +133,17 @@ elseStatementsP = do
   _ <- symbolP '}'
   pure ret
 
+whileStatementP :: Parser Statement
+whileStatementP = do
+  _ <- keywordP "while"
+  _ <- symbolP '('
+  expr <- exprP
+  _ <- symbolP ')'
+  _ <- symbolP '{'
+  statements <- many statementP
+  _ <- symbolP '}'
+  pure WhileStatement{expr, statements}
+
 doStatementP :: Parser Statement
 doStatementP = do
   _ <- keywordP "do"
@@ -146,7 +159,7 @@ returnStatementP = do
   pure $ ReturnStatement maybeExpr
 
 subroutineCallP :: Parser SubroutineCall
-subroutineCallP = do
+subroutineCallP = try $ do
   name1 <- identifierP
   _ <- symbolP '.'
   name2 <- identifierP
@@ -171,6 +184,11 @@ singleExprP = SingleExpr <$> termP
 termP :: Parser Term
 termP =
   (IntLiteralTerm <$> integerConstantP)
+    <|> (TrueLiteral <$ keywordP "true")
+    <|> (FalseLiteral <$ keywordP "false")
+    <|> (NullLiteral <$ keywordP "null")
+    <|> (SubroutineCallTerm <$> subroutineCallP)
+    <|> (VarTerm <$> identifierP)
     <|> ( do
             _ <- symbolP '('
             expr <- exprP
@@ -187,4 +205,11 @@ unaryOpP =
 binaryOpP :: Parser BinaryOp
 binaryOpP =
   (symbolP '+' $> AstAdd)
+    <|> (symbolP '-' $> AstSub)
     <|> (symbolP '*' $> AstMul)
+    <|> (symbolP '/' $> AstDiv)
+    <|> (symbolP '&' $> AstAnd)
+    <|> (symbolP '|' $> AstOr)
+    <|> (symbolP '<' $> AstLt)
+    <|> (symbolP '>' $> AstGt)
+    <|> (symbolP '=' $> AstEq)

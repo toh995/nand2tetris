@@ -7,7 +7,7 @@ import System.Directory
 import System.Environment
 import System.FilePath
 
-import AST
+import Compiler
 import Parse
 import VmCmd
 

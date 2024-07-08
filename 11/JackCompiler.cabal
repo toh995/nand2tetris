@@ -25,6 +25,7 @@ executable JackCompiler
   main-is:          Main.hs
   other-modules:
     AST
+    Compiler
     Parse
     SymbolTable
     VmCmd
