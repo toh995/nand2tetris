@@ -131,7 +131,11 @@ instance ToVmCmds Statement where
       , pure [Branching $ Goto l1]
       , pure [Branching $ Label l2]
       ]
-  toVmCmds (DoStatement subroutineCall) = toVmCmds subroutineCall
+  toVmCmds (DoStatement subroutineCall) =
+    concatM
+      [ toVmCmds subroutineCall
+      , pure [Memory $ Pop Temp 0]
+      ]
   toVmCmds (ReturnStatement (Just expr)) =
     concatM
       [ toVmCmds expr
