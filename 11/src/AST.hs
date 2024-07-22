@@ -1,6 +1,6 @@
 module AST where
 
-import SymbolTable (VarName, Variable)
+import VmCmd
 
 data Class = Class
   { name :: String
@@ -9,14 +9,38 @@ data Class = Class
   }
   deriving (Show)
 
+type VarName = String
+
+data Variable = Variable
+  { name :: VarName
+  , kind :: VarKind
+  , type' :: String
+  , index :: Int
+  }
+  deriving (Show)
+
+data VarKind = FieldVar | StaticVar | LocalVar | ArgVar
+  deriving (Eq, Show)
+
+segment :: Variable -> Segment
+segment Variable{kind} =
+  case kind of
+    FieldVar -> This
+    StaticVar -> Static
+    LocalVar -> Local
+    ArgVar -> Argument
+
 data SubroutineDec = SubroutineDec
   { name :: String
-  , parentClassName :: String
   , args :: [Variable]
   , localVars :: [Variable]
   , statements :: [Statement]
+  , kind :: SubroutineKind
   }
   deriving (Show)
+
+data SubroutineKind = ConstructorKind | FunctionKind | MethodKind
+  deriving (Eq, Show)
 
 data Statement
   = LetStatement VarName Expr
@@ -33,10 +57,15 @@ data Statement
   | ReturnStatement (Maybe Expr)
   deriving (Show)
 
-data SubroutineCall = SubroutineCall
-  { name :: String
-  , exprs :: [Expr]
-  }
+data SubroutineCall
+  = SimpleSubroutineCall
+      { name :: String
+      , exprs :: [Expr]
+      }
+  | CompoundSubroutineCall
+      { leftName, rightName :: String
+      , exprs :: [Expr]
+      }
   deriving (Show)
 
 data Expr
@@ -49,6 +78,7 @@ data Term
   | TrueLiteral
   | FalseLiteral
   | NullLiteral
+  | ThisKeyword
   | VarTerm VarName
   | SubroutineCallTerm SubroutineCall
   | ExprTerm Expr
@@ -56,7 +86,6 @@ data Term
   deriving (Show)
 
 -- \| StringLiteral String
--- \| ThisKeyword
 -- \| ArrayAccessTerm
 -- \| SubroutineCall
 -- \| ExpressionTerm

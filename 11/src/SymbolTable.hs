@@ -7,37 +7,11 @@ import Control.Monad.Except
 import Control.Monad.State
 import Data.HashMap.Lazy qualified as HashMap
 
-import VmCmd
-
-type VarName = String
-
-data Variable = Variable
-  { name :: VarName
-  , kind :: VarKind
-  , type' :: String
-  , index :: Int
-  }
-  deriving (Show)
-
-data VarKind = FieldVar | StaticVar | LocalVar | ArgVar
-  deriving (Show)
-
-segment :: Variable -> Segment
-segment Variable{kind} =
-  case kind of
-    FieldVar -> This
-    StaticVar -> Static
-    LocalVar -> Local
-    ArgVar -> Argument
-
--- segment :: VarKind -> Segment
--- segment FieldVar = This
--- segment StaticVar = Static
--- segment LocalVar = Local
--- segment ArgVar = Argument
+import AST
 
 data SymbolTable = SymbolTable
-  { _hm :: HashMap.HashMap String Variable
+  { _vHM :: HashMap.HashMap String Variable
+  , _sHM :: HashMap.HashMap String SubroutineDec
   , _fieldVarIdx :: Int
   , _staticVarIdx :: Int
   , _localVarIdx :: Int
@@ -48,15 +22,16 @@ makeLenses ''SymbolTable
 empty :: SymbolTable
 empty =
   SymbolTable
-    { _hm = HashMap.empty
+    { _vHM = HashMap.empty
+    , _sHM = HashMap.empty
     , _fieldVarIdx = 0
     , _staticVarIdx = 0
     , _localVarIdx = 0
     , _argVarIdx = 0
     }
 
-insert :: Variable -> SymbolTable -> SymbolTable
-insert v = execState stateMonad
+insertV :: Variable -> SymbolTable -> SymbolTable
+insertV v = execState stateMonad
  where
   stateMonad :: (MonadState SymbolTable m) => m ()
   stateMonad = do
@@ -67,24 +42,27 @@ insert v = execState stateMonad
           LocalVar -> symbolTable ^. localVarIdx
           ArgVar -> symbolTable ^. argVarIdx
     let v' = v{index = nextIdx}
-    modify $ hm . at v.name ?~ v'
+    modify $ vHM . at v.name ?~ v'
     modify $ case v.kind of
       FieldVar -> fieldVarIdx +~ 1
       StaticVar -> staticVarIdx +~ 1
       LocalVar -> localVarIdx +~ 1
       ArgVar -> argVarIdx +~ 1
 
-lookup :: (MonadError String m) => VarName -> SymbolTable -> m Variable
-lookup varName symbolTable =
-  case symbolTable ^. hm . at varName of
+lookupV :: (MonadError String m) => VarName -> SymbolTable -> m Variable
+lookupV varName symbolTable =
+  case symbolTable ^. vHM . at varName of
     (Just v) -> pure v
-    Nothing -> throwError $ "Could not find symbol '" ++ varName ++ "' in SymbolTable"
+    Nothing -> throwError $ "Could not find Variable '" ++ varName ++ "' in SymbolTable"
 
--- \| StaticVar | LocalVar | ArgVar
+variables :: SymbolTable -> [Variable]
+variables = HashMap.elems . _vHM
 
--- let s' = s{hm = HashMap.insert v.name v s.hm}
---  in s'
+insertS :: SubroutineDec -> SymbolTable -> SymbolTable
+insertS s symbolTable = symbolTable & sHM . at s.name ?~ s
 
--- buildSymbol :: Variable -> SymbolTable -> Variable
--- buildSymbol v st = case v.kind of
---   FieldVar -> Symbol{name = v.name, kind = v.kind, type' = v.varType, index = st.fieldVarIdx}
+lookupS :: (MonadError String m) => String -> SymbolTable -> m SubroutineDec
+lookupS name symbolTable =
+  case symbolTable ^. sHM . at name of
+    (Just s) -> pure s
+    Nothing -> throwError $ "Could not find SubroutineDec '" ++ name ++ "' in SymbolTable"

@@ -6,7 +6,7 @@ import Control.Monad.State
 import Data.Functor
 
 import AST
-import SymbolTable (SymbolTable, index, segment)
+import SymbolTable (SymbolTable)
 import SymbolTable qualified as S
 import VmCmd
 
@@ -15,6 +15,13 @@ concatMapM f = fmap concat . mapM f
 
 concatM :: (Monad m) => [m [a]] -> m [a]
 concatM ms = sequence ms <&> concat
+
+data ReadObj = ReadObj
+  { symbolTable :: SymbolTable
+  , className :: ClassName
+  }
+
+type ClassName = String
 
 type LabelIndex = Int
 
@@ -29,81 +36,71 @@ nextLabel = do
 
 classToVmCmds :: (MonadError String m) => Class -> m [VmCmd]
 classToVmCmds c =
-  let symbolTable = foldl (flip S.insert) S.empty c.classVars
-      computation = concatMapM toVmCmds c.subroutineDecs
-   in flip runReaderT symbolTable
-        . flip evalStateT initialLabelIdx
-        $ computation
+  let symbolTable = foldl (flip S.insertV) S.empty c.classVars
+      symbolTable' = foldl (flip S.insertS) symbolTable c.subroutineDecs
+   in evalStateT
+        ( concatMapM
+            (subroutineDecToVmCmds c.name symbolTable')
+            c.subroutineDecs
+        )
+        initialLabelIdx
 
---  evalStateT
---    ( concatMapM
---        (subroutineDecToVmCmds symbolTable)
---        c.subroutineDecs
---    )
---    initialLabelIdx
--- where
---  symbolTable = foldr S.insert S.empty c.classVars
+subroutineDecToVmCmds :: (MonadState LabelIndex m, MonadError String m) => ClassName -> SymbolTable -> SubroutineDec -> m [VmCmd]
+subroutineDecToVmCmds className symbolTable s@SubroutineDec{kind = ConstructorKind} =
+  let symbolTable' = foldl (flip S.insertV) symbolTable (s.args ++ s.localVars)
+      readObj = ReadObj{className, symbolTable = symbolTable'}
+   in runReaderT
+        ( do
+            let functionName = className ++ "." ++ s.name
+            let numFieldVars =
+                  length
+                    . filter (\var -> FieldVar == var.kind)
+                    . S.variables
+                    $ symbolTable
+            let headCmds =
+                  [ Function FunctionDef{functionName, numVars = length s.localVars}
+                  , Memory $ Push Constant numFieldVars
+                  , Function FunctionCall{functionName = "Memory.alloc", numArgs = 1}
+                  , Memory $ Pop Pointer 0
+                  ]
+            tailCmds <- concatMapM toVmCmds s.statements
+            pure $ headCmds ++ tailCmds
+        )
+        readObj
+subroutineDecToVmCmds className symbolTable s@SubroutineDec{kind = MethodKind} =
+  let this = Variable{name = "this", kind = ArgVar, type' = className, index = 0}
+      symbolTable' = foldl (flip S.insertV) symbolTable ([this] ++ s.args ++ s.localVars)
+      readObj = ReadObj{className, symbolTable = symbolTable'}
+   in runReaderT
+        ( concatM
+            [ pure [Function FunctionDef{functionName = className ++ "." ++ s.name, numVars = length s.localVars}]
+            , toVmCmds (VarTerm this.name)
+            , pure [Memory $ Pop Pointer 0]
+            , concatMapM toVmCmds s.statements
+            ]
+        )
+        readObj
+subroutineDecToVmCmds className symbolTable s@SubroutineDec{kind = FunctionKind} =
+  let symbolTable' = foldl (flip S.insertV) symbolTable (s.args ++ s.localVars)
+      readObj = ReadObj{className, symbolTable = symbolTable'}
+   in runReaderT
+        ( do
+            let functionName = className ++ "." ++ s.name
+            concatM
+              [ pure [Function FunctionDef{functionName, numVars = length s.localVars}]
+              , concatMapM toVmCmds s.statements
+              ]
+        )
+        readObj
 
--- subroutineDecToVmCmds :: (MonadState LabelIndex m, MonadError String m) => SymbolTable -> SubroutineDec -> m [VmCmd]
--- subroutineDecToVmCmds symbolTable s =
---   runReaderT m symbolTable'
---  where
---   m = do
---     let functionName = s.parentClassName ++ "." ++ s.name
---     let headCmd = Function FunctionDef{functionName, numVars = length s.localVars}
---     tailCmds <- concatMapM toVmCmds s.statements
---     pure $ headCmd : tailCmds
---   symbolTable' =
---     foldr
---       S.insert
---       symbolTable
---       (s.args ++ s.localVars)
-
--- class ToVmCmds a where
---   toVmCmds :: (MonadReader SymbolTable m) => a -> m [VmCmd]
 class ToVmCmds a where
-  toVmCmds :: (MonadError String m, MonadReader SymbolTable m, MonadState LabelIndex m) => a -> m [VmCmd]
-
--- instance ToVmCmds Class where
---   toVmCmds c =
---     local
---       (const symbolTable)
---       (concatMapM toVmCmds c.subroutineDecs)
---    where
---     symbolTable = foldr S.insert S.empty c.classVars
-
-instance ToVmCmds SubroutineDec where
-  toVmCmds s =
-    local
-      (\table -> foldl (flip S.insert) table vars)
-      ( do
-          let functionName = s.parentClassName ++ "." ++ s.name
-          let headCmd = Function FunctionDef{functionName, numVars = length s.localVars}
-          tailCmds <- concatMapM toVmCmds s.statements
-          pure $ headCmd : tailCmds
-      )
-   where
-    vars = s.args ++ s.localVars
-
--- toVmCmds s = do
---   modify $ \stateObj ->
---     stateObj
---       { symbolTable =
---           foldr
---             S.insert
---             stateObj.symbolTable
---             (s.args ++ s.localVars)
---       }
---   let functionName = s.parentClassName ++ "." ++ s.name
---   let headCmd = Function FunctionDef{functionName, numVars = length s.localVars}
---   tailCmds <- concatMapM toVmCmds s.statements
---   pure $ headCmd : tailCmds
+  toVmCmds :: (MonadError String m, MonadReader ReadObj m, MonadState LabelIndex m) => a -> m [VmCmd]
 
 instance ToVmCmds Statement where
   toVmCmds (LetStatement varName expr) = do
     headCmds <- toVmCmds expr
-    symbolTable <- ask
-    var <- S.lookup varName symbolTable
+    r <- ask
+    var <- S.lookupV varName r.symbolTable
     let tailCmd = Memory $ Pop (segment var) (index var)
     pure $ headCmds ++ [tailCmd]
   toVmCmds i@IfStatement{} = do
@@ -148,11 +145,37 @@ instance ToVmCmds Statement where
       ]
 
 instance ToVmCmds SubroutineCall where
-  toVmCmds s =
-    concatM
-      [ concatMapM toVmCmds s.exprs
-      , pure [Function $ FunctionCall{functionName = s.name, numArgs = length s.exprs}]
-      ]
+  toVmCmds s@SimpleSubroutineCall{} = do
+    r <- ask
+    let functionName = r.className ++ "." ++ s.name
+    subroutineDec <- S.lookupS s.name r.symbolTable
+    if subroutineDec.kind == MethodKind
+      then
+        concatM
+          [ toVmCmds ThisKeyword
+          , concatMapM toVmCmds s.exprs
+          , pure [Function $ FunctionCall{functionName, numArgs = 1 + length s.exprs}]
+          ]
+      else
+        concatM
+          [ concatMapM toVmCmds s.exprs
+          , pure [Function $ FunctionCall{functionName, numArgs = length s.exprs}]
+          ]
+  toVmCmds s@CompoundSubroutineCall{} =
+    ask >>= \r ->
+      tryError (S.lookupV s.leftName r.symbolTable)
+        >>= \case
+          Right var ->
+            concatM
+              [ toVmCmds (VarTerm var.name)
+              , concatMapM toVmCmds s.exprs
+              , pure [Function $ FunctionCall{functionName = var.type' ++ "." ++ s.rightName, numArgs = 1 + length s.exprs}]
+              ]
+          Left _ ->
+            concatM
+              [ concatMapM toVmCmds s.exprs
+              , pure [Function $ FunctionCall{functionName = s.leftName ++ "." ++ s.rightName, numArgs = length s.exprs}]
+              ]
 
 instance ToVmCmds Expr where
   toVmCmds (SingleExpr t) = toVmCmds t
@@ -168,9 +191,10 @@ instance ToVmCmds Term where
   toVmCmds TrueLiteral = pure [Memory $ Push Constant 1, Arithmetic Neg]
   toVmCmds FalseLiteral = pure [Memory $ Push Constant 0]
   toVmCmds NullLiteral = pure [Memory $ Push Constant 0]
+  toVmCmds ThisKeyword = pure [Memory $ Push Pointer 0]
   toVmCmds (VarTerm varName) = do
-    symbolTable <- ask
-    var <- S.lookup varName symbolTable
+    r <- ask
+    var <- S.lookupV varName r.symbolTable
     pure [Memory $ Push (segment var) (index var)]
   toVmCmds (SubroutineCallTerm s) = toVmCmds s
   toVmCmds (ExprTerm expr) = toVmCmds expr

@@ -8,7 +8,6 @@ import Text.Megaparsec.Char
 import Text.Megaparsec.Char.Lexer qualified as L
 
 import AST
-import SymbolTable
 
 parseClass :: (MonadError String m) => String -> m Class
 parseClass =
@@ -47,8 +46,8 @@ stringConstantP =
 identifierP :: Parser String
 identifierP = lexeme $
   do
-    headChar <- letterChar
-    tailChars <- many (alphaNumChar <|> char '_')
+    headChar <- letterChar <|> char '_'
+    tailChars <- many (letterChar <|> char '_' <|> digitChar)
     pure $ headChar : tailChars
 
 -- Composite
@@ -57,13 +56,31 @@ classP = do
   _ <- keywordP "class"
   name <- identifierP
   _ <- symbolP '{'
-  subroutineDecs <- many $ subroutineDecP name
+  classVars <- concat <$> many classVarDecP
+  subroutineDecs <- many subroutineDecP
   _ <- symbolP '}'
-  pure Class{name, subroutineDecs, classVars = []}
+  pure Class{name, classVars, subroutineDecs}
 
-subroutineDecP :: String -> Parser SubroutineDec
-subroutineDecP parentClassName = do
-  _ <- keywordP "function"
+classVarDecP :: Parser [Variable]
+classVarDecP = do
+  kind <-
+    (keywordP "static" $> StaticVar)
+      <|> (keywordP "field" $> FieldVar)
+  type' <- typeP
+  names <- sepBy1 identifierP (symbolP ',')
+  _ <- symbolP ';'
+  let vars =
+        map
+          (\name -> Variable{name, type', kind, index = 0})
+          names
+  pure vars
+
+subroutineDecP :: Parser SubroutineDec
+subroutineDecP = do
+  kind <-
+    (keywordP "constructor" $> ConstructorKind)
+      <|> (keywordP "function" $> FunctionKind)
+      <|> (keywordP "method" $> MethodKind)
   _ <- keywordP "void" <|> typeP
   name <- identifierP
   _ <- symbolP '('
@@ -72,7 +89,7 @@ subroutineDecP parentClassName = do
   localVars <- concat <$> many localVarsP
   statements <- many statementP
   _ <- symbolP '}'
-  pure SubroutineDec{name, args, localVars, statements, parentClassName}
+  pure SubroutineDec{name, args, localVars, statements, kind}
 
 typeP :: Parser String
 typeP =
@@ -159,14 +176,25 @@ returnStatementP = do
   pure $ ReturnStatement maybeExpr
 
 subroutineCallP :: Parser SubroutineCall
-subroutineCallP = try $ do
-  name1 <- identifierP
-  _ <- symbolP '.'
-  name2 <- identifierP
+subroutineCallP = simpleSubroutineCallP <|> compoundSubroutineCallP
+
+simpleSubroutineCallP :: Parser SubroutineCall
+simpleSubroutineCallP = try $ do
+  name <- identifierP
   _ <- symbolP '('
   exprs <- sepBy exprP (symbolP ',')
   _ <- symbolP ')'
-  pure SubroutineCall{name = name1 ++ "." ++ name2, exprs}
+  pure SimpleSubroutineCall{name, exprs}
+
+compoundSubroutineCallP :: Parser SubroutineCall
+compoundSubroutineCallP = try $ do
+  leftName <- identifierP
+  _ <- symbolP '.'
+  rightName <- identifierP
+  _ <- symbolP '('
+  exprs <- sepBy exprP (symbolP ',')
+  _ <- symbolP ')'
+  pure CompoundSubroutineCall{leftName, rightName, exprs}
 
 exprP :: Parser Expr
 exprP = try binaryExprP <|> singleExprP
@@ -187,6 +215,7 @@ termP =
     <|> (TrueLiteral <$ keywordP "true")
     <|> (FalseLiteral <$ keywordP "false")
     <|> (NullLiteral <$ keywordP "null")
+    <|> (ThisKeyword <$ keywordP "this")
     <|> (SubroutineCallTerm <$> subroutineCallP)
     <|> (VarTerm <$> identifierP)
     <|> ( do
