@@ -40,7 +40,7 @@ stringConstantP :: Parser String
 stringConstantP =
   lexeme $
     char '"'
-      *> many (satisfy (/= '"'))
+      *> many (satisfy ((&&) <$> (/= '"') <*> (/= '\n')))
       <* char '"'
 
 identifierP :: Parser String
@@ -116,19 +116,32 @@ localVarsP = do
 statementP :: Parser Statement
 statementP =
   letStatementP
+    <|> letStatementArrayP
     <|> ifStatementP
     <|> whileStatementP
     <|> doStatementP
     <|> returnStatementP
 
 letStatementP :: Parser Statement
-letStatementP = do
+letStatementP = try $ do
   _ <- keywordP "let"
   varName <- identifierP
   _ <- symbolP '='
   expr <- exprP
   _ <- symbolP ';'
   pure $ LetStatement varName expr
+
+letStatementArrayP :: Parser Statement
+letStatementArrayP = do
+  _ <- keywordP "let"
+  varName <- identifierP
+  _ <- symbolP '['
+  indexExpr <- exprP
+  _ <- symbolP ']'
+  _ <- symbolP '='
+  rhsExpr <- exprP
+  _ <- symbolP ';'
+  pure $ LetStatementArray{varName, indexExpr, rhsExpr}
 
 ifStatementP :: Parser Statement
 ifStatementP = do
@@ -211,12 +224,21 @@ singleExprP = SingleExpr <$> termP
 
 termP :: Parser Term
 termP =
-  (IntLiteralTerm <$> integerConstantP)
+  (IntLiteral <$> integerConstantP)
+    <|> (StringLiteral <$> stringConstantP)
     <|> (TrueLiteral <$ keywordP "true")
     <|> (FalseLiteral <$ keywordP "false")
     <|> (NullLiteral <$ keywordP "null")
     <|> (ThisKeyword <$ keywordP "this")
     <|> (SubroutineCallTerm <$> subroutineCallP)
+    <|> try
+      ( do
+          varName <- identifierP
+          _ <- symbolP '['
+          indexExpr <- exprP
+          _ <- symbolP ']'
+          pure $ ArrayAccessTerm{varName, indexExpr}
+      )
     <|> (VarTerm <$> identifierP)
     <|> ( do
             _ <- symbolP '('

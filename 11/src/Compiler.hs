@@ -3,6 +3,8 @@ module Compiler where
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
+import Data.Char
+import Data.Function
 import Data.Functor
 
 import AST
@@ -103,6 +105,19 @@ instance ToVmCmds Statement where
     var <- S.lookupV varName r.symbolTable
     let tailCmd = Memory $ Pop (segment var) (index var)
     pure $ headCmds ++ [tailCmd]
+  toVmCmds l@LetStatementArray{} =
+    concatM
+      [ toVmCmds (VarTerm l.varName)
+      , toVmCmds l.indexExpr
+      , pure [Arithmetic Add]
+      , toVmCmds l.rhsExpr
+      , pure
+          [ Memory $ Pop Temp 0
+          , Memory $ Pop Pointer 1
+          , Memory $ Push Temp 0
+          , Memory $ Pop That 0
+          ]
+      ]
   toVmCmds i@IfStatement{} = do
     l1 <- nextLabel
     l2 <- nextLabel
@@ -187,7 +202,20 @@ instance ToVmCmds Expr where
       ]
 
 instance ToVmCmds Term where
-  toVmCmds (IntLiteralTerm n) = pure [Memory $ Push Constant n]
+  toVmCmds (IntLiteral n) = pure [Memory $ Push Constant n]
+  toVmCmds (StringLiteral str) =
+    pure $
+      [ Memory $ Push Constant (length str)
+      , Function $ FunctionCall{functionName = "String.new", numArgs = 1}
+      ]
+        ++ ( str
+              & concatMap
+                ( \c ->
+                    [ Memory $ Push Constant (ord c)
+                    , Function $ FunctionCall{functionName = "String.appendChar", numArgs = 2}
+                    ]
+                )
+           )
   toVmCmds TrueLiteral = pure [Memory $ Push Constant 1, Arithmetic Neg]
   toVmCmds FalseLiteral = pure [Memory $ Push Constant 0]
   toVmCmds NullLiteral = pure [Memory $ Push Constant 0]
@@ -196,6 +224,16 @@ instance ToVmCmds Term where
     r <- ask
     var <- S.lookupV varName r.symbolTable
     pure [Memory $ Push (segment var) (index var)]
+  toVmCmds a@ArrayAccessTerm{} =
+    concatM
+      [ toVmCmds (VarTerm a.varName)
+      , toVmCmds a.indexExpr
+      , pure
+          [ Arithmetic Add
+          , Memory $ Pop Pointer 1
+          , Memory $ Push That 0
+          ]
+      ]
   toVmCmds (SubroutineCallTerm s) = toVmCmds s
   toVmCmds (ExprTerm expr) = toVmCmds expr
   toVmCmds (UnaryOpTerm op expr) =

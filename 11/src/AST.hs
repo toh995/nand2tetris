@@ -44,6 +44,11 @@ data SubroutineKind = ConstructorKind | FunctionKind | MethodKind
 
 data Statement
   = LetStatement VarName Expr
+  | LetStatementArray
+      { varName :: VarName
+      , indexExpr :: Expr
+      , rhsExpr :: Expr
+      }
   | IfStatement
       { expr :: Expr
       , ifStatements :: [Statement]
@@ -74,19 +79,22 @@ data Expr
   deriving (Show)
 
 data Term
-  = IntLiteralTerm Int
+  = IntLiteral Int
+  | StringLiteral String
   | TrueLiteral
   | FalseLiteral
   | NullLiteral
   | ThisKeyword
   | VarTerm VarName
+  | ArrayAccessTerm
+      { varName :: VarName
+      , indexExpr :: Expr
+      }
   | SubroutineCallTerm SubroutineCall
   | ExprTerm Expr
   | UnaryOpTerm UnaryOp Term
   deriving (Show)
 
--- \| StringLiteral String
--- \| ArrayAccessTerm
 -- \| SubroutineCall
 -- \| ExpressionTerm
 
