@@ -95,9 +95,6 @@ data Term
   | UnaryOpTerm UnaryOp Term
   deriving (Show)
 
--- \| SubroutineCall
--- \| ExpressionTerm
-
 data UnaryOp = AstNeg | AstNot
   deriving (Show)
 
